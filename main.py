@@ -1,5 +1,7 @@
 import os 
 import datetime
+import numpy as np
+
 
 path=os.path.abspath(__file__)
 path=path.replace("\\","/")
@@ -47,7 +49,10 @@ for i in range(len(waypoints)):
             elif seg[0]=='"time"':
                 timel.append(float(seg[1]))
 
-
+sortindex = np.argsort(timel)
+timel=[timel[i] for i in sortindex]
+lon=[lon[i] for i in sortindex]
+lat=[lat[i] for i in sortindex]
 
 lines=['<?xml version="1.0" encoding="UTF-8" ?><gpx version="1.0" creator="Jelle Westenberger" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.topografix.com/GPX/1/0" xsi:schemaLocation="http://www.topografix.com/GPX/1/0 http://www.topografix.com/GPX/1/0/gpx.xsd">\n \n <trk><trkseg>\n'] 
 
@@ -55,7 +60,7 @@ for i in range(len(timel)):
     date=datetime.datetime.fromtimestamp(timel[i])
  
 
-    test=datetime.datetime.fromtimestamp(1552311342.3)
+ 
     ds=date.isoformat()+"Z"
     s='<trkpt lat="%f" lon="%f"><time>%s</time><src>polarsteps</src></trkpt>\n' %(lat[i],lon[i],ds)
     lines.append(s)
