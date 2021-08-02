@@ -9,14 +9,14 @@ fname=path.split("/")[-1]
 path=path.replace(fname,"")
 files=os.listdir(path)
 j=0
-print "Located json files: "
+print("Located json files: ")
 while j<len(files):
     if files[j][-4:].lower()=='json':
-        print "%s (%d)" %(files[j],j)
+        print("%s (%d)" %(files[j],j))
         j+=1
     else:
         del files[j]
-selfile=files[int(raw_input("select json file "))]
+selfile=files[int(input("select json file "))]
 gpsdat=path+selfile
 dat=open(gpsdat)
 waypoints=dat.readlines()
@@ -29,10 +29,10 @@ lon=[]
 lat=[]
 timel=[]
 
-print "Parsing.."
+print("Parsing..") 
 for i in range(len(waypoints)):
     if i%100==0:
-        print "%f " %((100.*i/len(waypoints)))
+        print("%f " %((100.*i/len(waypoints))))
     line=waypoints[i]
     line=line.replace(' ', '')
     line=line.replace('}','')
@@ -69,7 +69,7 @@ lines.append("</trkseg></trk></gpx>")
 exp=open(path+selfile[:-5]+"_converted.gpx", "w+")
 exp.writelines(lines)
 exp.close()
-print "Done,\n exported to %s"%(selfile[:-5]+"_converted.gpx")
+print("Done,\n exported to %s"%(selfile[:-5]+"_converted.gpx"))
 try:
     input('Finished')
 except:
