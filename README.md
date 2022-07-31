@@ -6,7 +6,7 @@ Note that the script assumes that the unix time stamps are in the GMT+0 time zon
 
 The script may not contain the most elegant or robust code, but it was very useful to me, and may be useful to you too. 
 
-# InfluxDB
+## InfluxDB
 Since I also log my phone's coordinates to InfluxDB (via HomeAssistant), I also added the functionality to convert this gps data to the gpx scheme. 
 
 It assumes that the csv files are influxdb exports and that the gpx data is formatted like:
