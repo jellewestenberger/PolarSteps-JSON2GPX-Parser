@@ -1,0 +1,4 @@
+*.csv
+*.gpx
+*.json
+!example.json
