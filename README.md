@@ -16,3 +16,9 @@ It assumes that the csv files are influxdb exports and that the gpx data is form
     "2022-07-19T17:30:00.000+02:00","54.2963866","9.759142266666666"
     "2022-07-19T17:31:00.000+02:00","54.3107061","9.747213133333334"
 The header is skipped, so the specific format doesn't matter there.
+
+Example query:
+``` 
+SELECT last("latitude") AS "mean_latitude", last("longitude") AS "mean_longitude" FROM "HomeAssistant"."autogen"."state" WHERE time > :dashboardTime: AND time < :upperDashboardTime: AND "entity_id"='jelle' GROUP BY time(1m) FILL(linear)
+
+```
