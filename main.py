@@ -1,102 +1,133 @@
-import os 
-import datetime
-import numpy as np
+import json
+import csv
 import glob
 import subprocess
-
-# converting json files (polarsteps export)
-def convertjson(gpsdat,name):
-    dat=open(gpsdat)
-    waypoints=dat.readlines()
-    dat.close()
-
-    waypoints=waypoints[0].split('[')
-    waypoints=waypoints[1].split('{')
-
-    lon=[]
-    lat=[]
-    timel=[]
-
-    print("Parsing..") 
-    for i in range(len(waypoints)):
-        if i%100==0:
-            print("%f " %((100.*i/len(waypoints))))
-        line=waypoints[i]
-        line=line.replace(' ', '')
-        line=line.replace('}','')
-        line=line.replace(']','')
-        if len(line)>0:
-            line=line.split(',')
-            
-            for j in range(len(line)):
-                seg=line[j].split(':')
-                if seg[0]=='"lon"':
-                    lon.append(float(seg[1]))
-                elif seg[0]=='"lat"':
-                    lat.append(float(seg[1]))
-                elif seg[0]=='"time"':
-                    timel.append(float(seg[1]))
-
-    sortindex = np.argsort(timel)
-    timel=[timel[i] for i in sortindex]
-    lon=[lon[i] for i in sortindex]
-    lat=[lat[i] for i in sortindex]
-
-    lines=['<?xml version="1.0" encoding="UTF-8" ?><gpx version="1.0" creator="%s" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.topografix.com/GPX/1/0" xsi:schemaLocation="http://www.topografix.com/GPX/1/0 http://www.topografix.com/GPX/1/0/gpx.xsd">\n \n <trk><trkseg>\n'%name]
-
-    for i in range(len(timel)):
-        date=datetime.datetime.fromtimestamp(timel[i])
-    
-
-    
-        ds=date.isoformat()+"Z" # Indicates UTC time
-        s='<trkpt lat="%f" lon="%f"><time>%s</time><src>polarsteps</src></trkpt>\n' %(lat[i],lon[i],ds)
-        lines.append(s)
-    lines.append("</trkseg></trk></gpx>")
-    exp=open(gpsdat[:-5]+"_converted.gpx", "w+")
-    exp.writelines(lines)
-    exp.close()
-    print("Done,\n exported to %s"%(gpsdat[:-5]+"_converted.gpx"))
-
-# converting csv files (influxdb export)
-def convertcsv(file):
-    source = "influxdb"
-    outputfile = open(file.replace(".csv","_converted.gpx"),'w')
-
-    data =np.genfromtxt(file,delimiter=",",skip_header=1,dtype='str')
-
-    lines = ['<?xml version="1.0" encoding="UTF-8" ?><gpx version="1.0" creator="Jelle Westenberger" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.topografix.com/GPX/1/0" xsi:schemaLocation="http://www.topografix.com/GPX/1/0 http://www.topografix.com/GPX/1/0/gpx.xsd">\n','<trk><trkseg>\n\n']
-    for i in range(len(data)):
-        line = data[i]
-
-        if line[1]!="":
-            time = line[0].replace('"','')
-
-            lat = line[1].replace('"','')
-            lon = line[2].replace('"','')
-            lines.append('<trkpt lat="%s" lon="%s"><time>%s</time><src>%s</src></trkpt>\n' % (lat,lon,time,source))
-    lines.append("</trkseg></trk></gpx>")
-
-    outputfile.writelines(lines)
-    outputfile.close()
-    print("Done,\n exported to %s"%outputfile.name)
+from datetime import datetime
+from pathlib import Path
+from typing import List, Dict
 
 
-jsonfiles = glob.glob("./*.json")
-print("found %i json files:" % (len(jsonfiles)))
+GPX_HEADER = """<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.0"
+     creator="{creator}"
+     xmlns="http://www.topografix.com/GPX/1/0"
+     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+     xsi:schemaLocation="http://www.topografix.com/GPX/1/0
+                         http://www.topografix.com/GPX/1/0/gpx.xsd">
+<trk><trkseg>
+"""
 
-try:
-    name = subprocess.check_output("git config user.name", shell=True).decode("utf-8").replace('\n','')
-    print("using git name: %s" % (name))
-except:
-    name = str(input("Input your name: "))
+GPX_FOOTER = """</trkseg></trk></gpx>
+"""
 
-for f in jsonfiles:
-    print("- %s" % (f))
-    convertjson(f,name)
 
-csvfiles = glob.glob("./*.csv")
-print("found %i csv files:" % (len(csvfiles)))
-for f in csvfiles:
-    print("- %s" % (f))
-    convertcsv(f)
+# ---------- GPX helpers ----------
+
+def write_gpx(
+    points: List[Dict],
+    output_path: Path,
+    creator: str,
+    source: str,
+):
+    with output_path.open("w", encoding="utf-8") as f:
+        f.write(GPX_HEADER.format(creator=creator))
+
+        for p in points:
+            f.write(
+                f'<trkpt lat="{p["lat"]}" lon="{p["lon"]}">'
+                f'<time>{p["time"]}</time>'
+                f'<src>{source}</src>'
+                f'</trkpt>\n'
+            )
+
+        f.write(GPX_FOOTER)
+
+    print(f"Exported → {output_path}")
+
+
+# ---------- Polarsteps JSON ----------
+
+def parse_polarsteps_json(path: Path) -> List[Dict]:
+    with path.open() as f:
+        data = json.load(f)
+
+    points = []
+    for entry in data['locations']:
+        points.append(
+            {
+                "lat": entry["lat"],
+                "lon": entry["lon"],
+                "time": datetime.fromtimestamp(entry["time"]).isoformat() + "Z",
+            }
+        )
+
+    # Ensure chronological order
+    return sorted(points, key=lambda p: p["time"])
+
+
+def convert_json(path: Path, creator: str):
+    points = parse_polarsteps_json(path)
+    output = path.with_name(path.stem + "_converted.gpx")
+    write_gpx(points, output, creator, source="polarsteps")
+
+
+# ---------- InfluxDB CSV ----------
+
+def parse_influx_csv(path: Path) -> List[Dict]:
+    points = []
+
+    with path.open(newline="", encoding="utf-8") as f:
+        reader = csv.reader(f)
+        next(reader)  # skip header
+
+        for row in reader:
+            if not row or not row[1]:
+                continue
+
+            points.append(
+                {
+                    "time": row[0].strip('"'),
+                    "lat": row[1].strip('"'),
+                    "lon": row[2].strip('"'),
+                }
+            )
+
+    return points
+
+
+def convert_csv(path: Path, creator: str):
+    points = parse_influx_csv(path)
+    output = path.with_name(path.stem + "_converted.gpx")
+    write_gpx(points, output, creator, source="influxdb")
+
+
+# ---------- CLI / entry point ----------
+
+def get_git_username() -> str:
+    try:
+        return (
+            subprocess.check_output(
+                ["git", "config", "user.name"], stderr=subprocess.DEVNULL
+            )
+            .decode()
+            .strip()
+        )
+    except Exception:
+        return input("Input your name (for the GPX header): ")
+
+
+def main():
+    creator = get_git_username()
+    print(f"Using creator: {creator}")
+
+    for json_file in map(Path, glob.glob("*.json")):
+        print(f"Converting {json_file}")
+        convert_json(json_file, creator)
+
+    for csv_file in map(Path, glob.glob("*.csv")):
+        print(f"Converting {csv_file}")
+        convert_csv(csv_file, creator)
+
+
+if __name__ == "__main__":
+    main()
